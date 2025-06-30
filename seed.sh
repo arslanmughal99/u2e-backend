@@ -1,0 +1,1 @@
+docker container exec -t  $(docker container ls --filter "name=u_api" --format="{{.ID}}") sh -c 'npx prisma migrate reset --force && /usr/local/bin/node seed.js'

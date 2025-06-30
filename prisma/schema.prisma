@@ -1,0 +1,718 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User roles 
+enum UserRole {
+  Admin
+  Student
+  Instructor
+  Organization
+}
+
+// Billing types
+enum BillingType {
+  Free
+  Monthly
+  Lifetime
+}
+
+// Oraganization
+model Organization {
+  id          Int      @id @default(autoincrement())
+  name        String
+  // cloudnary asset id
+  coverImage  String?  @map("cover_image")
+  description String?
+  courses     Course[]
+  members     User[]
+}
+
+// Platform users (student, Instructor, Organization)
+model User {
+  id                   Int                   @id @default(autoincrement())
+  // fullname             String
+  firstName            String                @map("first_name")
+  lastName             String                @map("last_name")
+  email                String
+  payoutLockTime       Int                   @default(5) @map("payout_lock_time") // Days before which payout cannot be applied
+  role                 UserRole
+  bio                  String?
+  jobTitle             String?               @map("job_title")
+  storageDirectory     String                @unique @default(cuid()) @map("storage_directory")
+  // cloudnary asset id
+  coverImage           String?               @map("cover_image")
+  // cloudnary asset id
+  profileImage         String?               @map("profile_image")
+  salt                 String
+  hash                 String
+  timezone             String
+  username             String                @unique
+  organizationId       Int?
+  facebookId           String?
+  rights               Json?
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  verified             Boolean               @default(false)
+  identified           Boolean               @default(false)
+  // Courses owned by organization
+  organization         Organization?         @relation(fields: [organizationId], references: [id])
+  //Courses owned by instructor
+  courses              Course[]
+  lectures             Lecture[]
+  enrollments          Enrollment[]
+  associates           Associate[]
+  associateInvitations AssociateInvitation[]
+  payments             Payment[]
+  bundles              Bundle[]
+  statements           Statement[]
+  payouts              Payout[]
+  payoutAccounts       PayoutAccount[]
+  reviews              Review[]
+  threads              Thread[]
+  threadComments       ThreadComment[]
+  threadFeedbacks      ThreadFeedback[]
+  blogs                Blog[]
+  blogComments         BlogComment[]
+  blogFeedbacks        BlogFeedback[]
+  orders               Order[]
+  storeOrders          StoreOrder[]
+  tickets              Ticket[]
+  ticketComments       TicketComment[]
+  rewardPoints         RewardPoints[]
+  lecturesProgresses   LectureProgress[]
+  activeAssignments    ActiveAssignment[]
+  assignmentMessages   AssignmentMessage[]
+  certificates         Certificate[]
+  notificaitons        Notificaiton[]
+}
+
+// Courses
+model Course {
+  id                  Int                   @id @default(autoincrement())
+  title               String
+  thumbnail           String
+  approved            Boolean               @default(false)
+  billingType         BillingType           @default(Free) @map("billing_type")
+  price               Float?
+  description         String
+  published           Boolean
+  faqs                Json[]
+  requirements        Json[]
+  objectives          String[]
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  instructor          User?                 @relation(fields: [instructorId], references: [id])
+  instructorId        Int?
+  organization        Organization?         @relation(fields: [organizationId], references: [id])
+  organizationId      Int?
+  enrollments         Enrollment[]
+  associates          Associate[]
+  associateInvitation AssociateInvitation[]
+  lectures            Lecture[]
+  deleted             Boolean               @default(false)
+  bundle              Bundle?               @relation(fields: [bundleId], references: [id])
+  bundleId            Int?
+  statements          Statement[]
+  category            Category              @relation(fields: [categoryId], references: [id])
+  categoryId          Int
+  reviews             Review[]
+  order               Order?                @relation(fields: [orderId], references: [id])
+  orderId             Int?
+  coupon              Coupon?               @relation(fields: [couponId], references: [id])
+  couponId            Int?
+  tickets             Ticket[]
+  certificates        Certificate[]
+  notificaitons       Notificaiton[]
+  lectureGroups       LectureGroup[]
+}
+
+// Course category
+model Category {
+  id       Int       @id @default(autoincrement())
+  title    String
+  icon     String
+  courses  Course[]
+  products Product[]
+  coupon   Coupon?   @relation(fields: [couponId], references: [id])
+  couponId Int?
+  blogs    Blog[]
+}
+
+// Course review
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  review    String
+  delete    Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course?  @relation(fields: [courseId], references: [id])
+  product   Product? @relation(fields: [productId], references: [id])
+  productId Int?
+  courseId  Int?
+  userId    Int
+}
+
+// Courses that are allowed to instructor to modify 
+model Associate {
+  course       Course  @relation(fields: [courseId], references: [id])
+  instructor   User    @relation(fields: [instructorId], references: [id])
+  courseId     Int
+  instructorId Int
+  delete       Boolean @default(false)
+
+  @@id([courseId, instructorId])
+}
+
+// Courses enrolled by student
+enum EnrollmentStatus {
+  Active
+  Archived
+  Completed
+}
+
+model Enrollment {
+  id        Int              @id @default(autoincrement())
+  expiry    DateTime?
+  status    EnrollmentStatus @default(Active)
+  course    Course           @relation(fields: [courseId], references: [id])
+  student   User             @relation(fields: [studentId], references: [id])
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  courseId  Int
+  studentId Int
+  deleted   Boolean          @default(false)
+}
+
+model LectureGroup {
+  id       Int       @id @default(autoincrement())
+  title    String
+  index    Int
+  course   Course    @relation(fields: [courseId], references: [id])
+  courseId Int
+  lectures Lecture[]
+}
+
+// Lectures belongs to course
+model Lecture {
+  id                Int               @id @default(autoincrement())
+  title             String
+  description       String
+  duration          Float
+  preview           Boolean           @default(false)
+  // for sorting lectures
+  index             Int
+  group             LectureGroup?     @relation(fields: [lectureGroupId], references: [id])
+  // cloudnary asset id
+  thumbnail         String
+  // cloudnary asset id
+  video             String
+  instructor        User              @relation(fields: [instructorId], references: [id])
+  instructorId      Int
+  // cloudnary asset ids
+  attachments       Json[]
+  deleted           Boolean           @default(false)
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  course            Course            @relation(fields: [courseId], references: [id])
+  courseId          Int
+  quiz              Quiz?
+  assignments       Assignment[]
+  lectureProgresses LectureProgress[]
+  lectureGroupId    Int?
+}
+
+model Quiz {
+  id        Int      @id @default(autoincrement())
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  questions Json
+
+  lecture   Lecture @relation(fields: [lectureId], references: [id])
+  lectureId Int     @unique
+}
+
+model LectureProgress {
+  progress  Int
+  completed Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  lecture   Lecture  @relation(fields: [lectureId], references: [id])
+  lectureId Int
+
+  @@id([userId, lectureId])
+}
+
+// Invitations by course author to other instructors 
+model AssociateInvitation {
+  id           Int     @id @default(autoincrement())
+  accepted     Boolean @default(false)
+  instructor   User    @relation(fields: [instructorId], references: [id])
+  course       Course  @relation(fields: [courseId], references: [id])
+  instructorId Int
+  courseId     Int
+  delete       Boolean @default(false)
+}
+
+model Bundle {
+  id           Int         @id @default(autoincrement())
+  title        String      @default("")
+  price        Float?
+  courses      Course[]
+  instructor   User        @relation(fields: [instructorId], references: [id])
+  billingType  BillingType @default(Free)
+  deleted      Boolean     @default(false)
+  instructorId Int
+  statements   Statement[]
+}
+
+enum PaymentMethod {
+  Yoco
+}
+
+enum PayoutStatus {
+  Pending
+  Paid
+  Rejected
+}
+
+model Payout {
+  id                Int          @id @default(autoincrement())
+  amount            Int
+  status            PayoutStatus @default(Pending)
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  lastStatement     Statement    @relation(fields: [lastStatementId], references: [id])
+  lastStatementId   Int
+  user              User         @relation(fields: [userId], references: [id])
+  userId            Int
+  trxId             String?
+  //--- Account details 
+  iban              String
+  bankName          String       @map("bank_name")
+  currency          String
+  swiftCode         String       @map("swift_code")
+  branchCode        String       @map("branch_code")
+  accountNumber     String       @map("account_number")
+  accountHolderName String       @map("account_holder_name")
+}
+
+model PayoutAccount {
+  id                Int      @id @default(autoincrement())
+  iban              String
+  bankName          String   @map("bank_name")
+  currency          String
+  swiftCode         String   @map("swift_code")
+  branchCode        String   @map("branch_code")
+  accountNumber     String   @map("account_number")
+  accountHolderName String   @map("account_holder_name")
+  createdAt         DateTime @default(now()) @map("created_at")
+  user              User     @relation(fields: [userId], references: [id])
+  userId            Int
+}
+
+// FORUM MODELS
+model Thread {
+  id        Int              @id @default(autoincrement())
+  title     String
+  content   String
+  deleted   Boolean          @default(false)
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  feedbacks ThreadFeedback[]
+  user      User             @relation(fields: [userId], references: [id])
+  userId    Int
+  comments  ThreadComment[]
+}
+
+model ThreadComment {
+  id        Int      @id @default(autoincrement())
+  comment   String
+  deleted   Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  thread    Thread   @relation(fields: [threadId], references: [id])
+  threadId  Int
+}
+
+enum ThreadFeedbackReaction {
+  Like
+  Dislike
+}
+
+model ThreadFeedback {
+  id          Int                    @id @default(autoincrement())
+  reaction    ThreadFeedbackReaction
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  forumThread Thread?                @relation(fields: [threadId], references: [id])
+  threadId    Int?
+  user        User                   @relation(fields: [userId], references: [id])
+  userId      Int
+}
+
+// BLOG MODELS
+model Blog {
+  id         Int            @id @default(autoincrement())
+  title      String
+  image      String
+  content    String
+  deleted    Boolean        @default(false)
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  comments   BlogComment[]
+  feedbacks  BlogFeedback[]
+  user       User           @relation(fields: [userId], references: [id])
+  userId     Int
+  category   Category       @relation(fields: [categoryId], references: [id])
+  categoryId Int
+}
+
+model BlogComment {
+  id        Int      @id @default(autoincrement())
+  comment   String
+  deleted   Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  blog      Blog     @relation(fields: [blogId], references: [id])
+  blogId    Int
+}
+
+enum BlogFeedbackReaction {
+  Like
+  Dislike
+}
+
+model BlogFeedback {
+  id        Int                  @id @default(autoincrement())
+  reaction  BlogFeedbackReaction
+  updatedAt DateTime             @updatedAt @map("updated_at")
+  createdAt DateTime             @default(now()) @map("created_at")
+  blog      Blog?                @relation(fields: [blogId], references: [id])
+  blogId    Int?
+  user      User                 @relation(fields: [userId], references: [id])
+  userId    Int
+}
+
+enum ProductAvailability {
+  InStock
+  OutOfStock
+}
+
+model Product {
+  id                 Int                 @id @default(autoincrement())
+  price              Float
+  attributes         Json
+  specifications     Json
+  shippingRate       Float               @map("shipping_rate")
+  title              String
+  description        String
+  images             String[]
+  virtual            Boolean             @default(false)
+  deleted            Boolean             @default(false)
+  availability       ProductAvailability @default(InStock)
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  category           Category            @relation(fields: [categoryId], references: [id])
+  categoryId         Int
+  reviews            Review[]
+  order              Order?              @relation(fields: [orderId], references: [id])
+  orderId            Int?
+  coupon             Coupon?             @relation(fields: [couponId], references: [id])
+  couponId           Int?
+  statements         Statement[]
+  storeProductOrders StoreOrderProduct[]
+}
+
+enum CouponOperator {
+  Flat
+  Percentage
+}
+
+enum CouponScope {
+  Global
+  Course
+  Product
+  Category
+}
+
+model Coupon {
+  id         Int            @id @default(autoincrement())
+  title      String         @unique
+  discount   Int
+  orders     Order[]
+  scope      CouponScope
+  operator   CouponOperator
+  deleted    Boolean        @default(false)
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  courses    Course[]
+  products   Product[]
+  categories Category[]
+}
+
+enum OrderStatus {
+  Pending
+  Expired
+  Completed
+}
+
+enum StoreOrderStatus {
+  Paid
+  Pending
+  Rejected
+  Refunded
+  Returned
+  Deliverd
+  Dispatched
+}
+
+model StoreOrderProduct {
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  discountedAmount Float?
+  order            StoreOrder @relation(fields: [storeOrderId], references: [id])
+  storeOrderId     Int
+  product          Product    @relation(fields: [productId], references: [id])
+  productId        Int
+
+  @@id([storeOrderId, productId])
+}
+
+model StoreOrder {
+  id        Int                 @id @default(autoincrement())
+  amount    Float
+  status    StoreOrderStatus    @default(Pending)
+  deleted   Boolean             @default(false)
+  updatedAt DateTime            @updatedAt @map("updated_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+  user      User                @relation(fields: [userId], references: [id])
+  userId    Int
+  products  StoreOrderProduct[]
+}
+
+model Order {
+  id        Int         @id @default(autoincrement())
+  amount    Float
+  status    OrderStatus @default(Pending)
+  deleted   Boolean     @default(false)
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  createdAt DateTime    @default(now()) @map("created_at")
+  executed  DateTime?
+  coupon    Coupon?     @relation(fields: [couponId], references: [id])
+  couponId  Int?
+  user      User        @relation(fields: [userId], references: [id])
+  userId    Int
+  meta      Json
+  products  Product[]
+  courses   Course[]
+  payments  Payment[]
+}
+
+model Payment {
+  id          Int           @id @default(autoincrement())
+  meta        Json?
+  executeMeta Json?         @map("execute_meta")
+  method      PaymentMethod @default(Yoco)
+  chargeId    String        @unique @map("charge_id")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  user        User          @relation(fields: [userId], references: [id])
+  userId      Int
+  order       Order         @relation(fields: [orderId], references: [id])
+  orderId     Int
+  statement   Statement[]
+}
+
+model Statement {
+  id        Int      @id @default(autoincrement())
+  amount    Int
+  createdAt DateTime @default(now()) @map("created_at")
+  bundle    Bundle?  @relation(fields: [bundleId], references: [id])
+  bundleId  Int?
+  course    Course?  @relation(fields: [courseId], references: [id])
+  courseId  Int?
+  product   Product? @relation(fields: [productId], references: [id])
+  productId Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    Int?
+  payouts   Payout[]
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+  paymentId Int?
+}
+
+enum TicketType {
+  Course
+  Platform
+}
+
+enum TicketStatus {
+  Opened
+  Closed
+}
+
+model Ticket {
+  id             Int             @id @default(autoincrement())
+  type           TicketType
+  status         TicketStatus    @default(Opened)
+  subject        String
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  deleted        Boolean         @default(false)
+  user           User            @relation(fields: [userId], references: [id])
+  userId         Int
+  course         Course?         @relation(fields: [courseId], references: [id])
+  courseId       Int?
+  ticketComments TicketComment[]
+}
+
+model TicketComment {
+  id          Int      @id @default(autoincrement())
+  comment     String
+  attachments Json[]
+  deleted     Boolean  @default(false)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  ticketId    Int
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+}
+
+enum RewardPointsType {
+  Earn
+  Spent
+}
+
+model RewardPoints {
+  id        Int              @id @default(autoincrement())
+  points    Int
+  reason    String
+  type      RewardPointsType
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id])
+  userId    Int
+}
+
+model Assignment {
+  id               Int                @id @default(autoincrement())
+  minMarks         Float              @map("min_marks")
+  maxMarks         Float              @map("max_marks")
+  title            String
+  attachments      Json[]
+  deadline         DateTime // Unix timestamps
+  lecture          Lecture            @relation(fields: [lectureId], references: [id])
+  lectureId        Int
+  activeAssignment ActiveAssignment[]
+}
+
+enum AssignmentStatus {
+  Failed
+  Passed
+  Submited
+  Incomplete
+}
+
+model ActiveAssignment {
+  id                 Int                 @id @default(autoincrement())
+  deadline           DateTime
+  status             AssignmentStatus    @default(Incomplete)
+  marksObtained      Float?              @map("marks_obtained")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @default(now())
+  createdAt          DateTime            @default(now()) @map("created_at")
+  user               User                @relation(fields: [userId], references: [id])
+  userId             Int
+  assignment         Assignment          @relation(fields: [assignmentId], references: [id])
+  assignmentId       Int
+  assignmentMessages AssignmentMessage[]
+}
+
+model AssignmentMessage {
+  id                 Int              @id @default(autoincrement())
+  message            String
+  attachments        Json[]
+  createdAt          DateTime         @default(now()) @map("created_at")
+  user               User             @relation(fields: [userId], references: [id])
+  userId             Int
+  activeAssignment   ActiveAssignment @relation(fields: [activeAssignmentId], references: [id])
+  activeAssignmentId Int
+}
+
+model Certificate {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  course    Course   @relation(fields: [courseId], references: [id])
+  courseId  Int
+}
+
+enum NotificationScope {
+  Global
+  Course
+  Individual
+}
+
+model Notificaiton {
+  id        Int               @id @default(autoincrement())
+  title     String
+  message   String
+  scope     NotificationScope
+  deleted   Boolean           @default(false)
+  createdAt DateTime          @default(now()) @map("created_at")
+  user      User?             @relation(fields: [userId], references: [id])
+  course    Course?           @relation(fields: [courseId], references: [id])
+  courseId  Int?
+  userId    Int?
+}
+
+// model Meeting {
+//   id        Int           @id @default(autoincrement())
+//   days      Int[]
+//   charges   Int
+//   updatedAt DateTime      @updatedAt @map("updated_at")
+//   createdAt DateTime      @default(now()) @map("created_at")
+//   slots     MeetingSlot[]
+//   user      User?         @relation(fields: [userId], references: [id])
+//   userId    Int?          @unique
+// }
+
+// model MeetingSlot {
+//   start Int[]
+//   end   Int[]
+
+//   bookedMeeting BookedMeeting[]
+
+//   meeting   Meeting @relation(fields: [meetingId], references: [id])
+//   meetingId Int
+
+//   @@id([meetingId])
+// }
+
+// model BookedMeeting {
+//   id        Int         @id @default(autoincrement())
+//   createdAt DateTime    @default(now()) @map("created_at")
+//   slot      MeetingSlot @relation(fields: [slotId], references: [meetingId])
+//   slotId    Int
+
+//   user   User @relation(fields: [userId], references: [id])
+//   userId Int
+// }
